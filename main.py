@@ -1,39 +1,47 @@
 import flet as ft
 
-# -----------------------------
-# THEME fallback: nada de ft.colors / brightness / use_material3
-# -----------------------------
+# -------------------------------------------------
+# SHIMS para compatibilidade (ambientes Flet diferentes)
+# -------------------------------------------------
+# Shim de ft.colors / ft.Colors (alguns builds não expõem)
+if not hasattr(ft, "colors"):
+    class _ColorsShim:
+        def __getattr__(self, name):  # ft.colors.RED -> retorna string neutra
+            return "#000000"
+        def __getitem__(self, key):
+            return "#000000"
+    ft.colors = _ColorsShim()
+if not hasattr(ft, "Colors"):
+    ft.Colors = ft.colors  # alias
+
+# -------------------------------------------------
+# THEME fallback: nada de brightness/use_material3 para máxima compat
+# -------------------------------------------------
 try:
     from theme import apply_modern_theme as _apply_modern_theme_external  # type: ignore
 except Exception:
     _apply_modern_theme_external = None
 
 def apply_modern_theme(page: ft.Page):
-    """
-    Mantém compatibilidade ampla: não usa argumentos em Theme().
-    O claro/escuro é controlado só por page.theme_mode.
-    """
+    """Compatível com Flet 0.28.3 em web/desktop; não usa kwargs em Theme()."""
     if _apply_modern_theme_external:
         try:
             return _apply_modern_theme_external(page)
         except Exception:
             pass
-
     try:
-        page.theme = ft.Theme()  # sem kwargs para evitar incompatibilidades
+        page.theme = ft.Theme()  # sem kwargs
     except Exception:
         pass
-
-    # Em ambientes desktop, window_bgcolor pode existir; ignore se não existir
+    # Em desktop existe; web pode não ter
     try:
         page.window_bgcolor = None
     except Exception:
         pass
 
-
-# -----------------------------
+# -------------------------------------------------
 # Fallbacks para componentes opcionais
-# -----------------------------
+# -------------------------------------------------
 try:
     from components.alerts_bell import AlertsBell  # type: ignore
 except Exception:
@@ -60,35 +68,41 @@ except Exception:
             page.update()
         return type("AlertsModalStub", (), {"open": open_modal})()
 
-
-# -----------------------------
+# -------------------------------------------------
 # APP
-# -----------------------------
+# -------------------------------------------------
 def main(page: ft.Page):
     # Web-friendly
-    page.scroll = "none"  # string em 0.28.3
+    page.scroll = "none"
     page.theme_mode = ft.ThemeMode.LIGHT
     apply_modern_theme(page)
 
-    # Estado simples
+    # Alias para código legado que usa page.client_platform
+    if not hasattr(page, "client_platform"):
+        try:
+            setattr(page, "client_platform", getattr(page, "platform", None))
+        except Exception:
+            pass
+
+    # Estado
     sidebar_expanded = True
     alerts_modal = build_alerts_modal(page)
 
-    # Ícone de tema (troca ao alternar)
+    # Ícone de tema
     theme_icon = ft.IconButton(
         icon=ft.icons.DARK_MODE,
         tooltip="Alternar tema",
         on_click=lambda e: toggle_theme(),
     )
 
-    # -------- Modais padrão (Sobre)
+    # -------- Modal "Sobre"
     def show_about(e):
         dlg = ft.AlertDialog(
             modal=True,
             title=ft.Text("Sobre o Programa de Licitação", size=18, weight=ft.FontWeight.BOLD),
             content=ft.Text(
                 "Sistema de apoio e gestão de processos licitatórios.\n"
-                "Python + Flet 0.28.3 — compatível com Web e Desktop."
+                "Python + Flet 0.28.3 — Web/Desktop."
             ),
             actions=[ft.TextButton("Fechar", on_click=lambda _: close_dialog(dlg))],
             actions_alignment="end",
@@ -101,18 +115,36 @@ def main(page: ft.Page):
         dlg.open = False
         page.update()
 
-    # -------- Navegação (lazy import das páginas)
+    # -------- Navegação com resolver tolerante
     content_area = ft.Container(expand=True)
+
+    def _resolve_view(module, route_name: str):
+        # Tenta várias convenções: view(page), page_<rota>(page), build(page), render(page), get_view(page)
+        candidates = [
+            "view",
+            f"page_{route_name}",
+            "build",
+            "render",
+            "get_view",
+        ]
+        for name in candidates:
+            fn = getattr(module, name, None)
+            if callable(fn):
+                return fn
+        return None
 
     def navigate(route: str):
         try:
-            module = __import__(f"pages.{route}", fromlist=["view"])
-            content_area.content = module.view(page)  # padrão: def view(page) -> Control
+            module = __import__(f"pages.{route}", fromlist=["*"])
+            fn = _resolve_view(module, route)
+            if fn is None:
+                raise AttributeError(f"module 'pages.{route}' has no attribute 'view'")
+            content_area.content = fn(page)
         except Exception as ex:
             content_area.content = ft.Text(f"Erro ao abrir {route}: {ex}")
         page.update()
 
-    # -------- Header (sem paddings negativos, web-safe)
+    # -------- Header
     def build_header():
         left = ft.Row(
             [
@@ -141,7 +173,7 @@ def main(page: ft.Page):
             height=60,
         )
 
-    # -------- Sidebar colapsável (mesma essência; textos somem no colapso)
+    # -------- Sidebar colapsável
     def build_sidebar():
         nonlocal sidebar_expanded
 
