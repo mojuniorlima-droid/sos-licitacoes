@@ -3,10 +3,20 @@ import flet as ft
 from pathlib import Path
 import importlib
 
-# === IMPORTS DO ALERTAS (NOVOS) ===
-from components.alerts_modal import AlertsModal
-from components.alerts_bell import build_alerts_bell
-# ==================================
+# === ALERTAS: importa com fallback seguro ===
+try:
+    from components.alerts_modal import AlertsModal
+    from components.alerts_bell import build_alerts_bell
+    _ALERTS_OK = True
+except Exception:
+    _ALERTS_OK = False
+    class AlertsModal:
+        def __init__(self, page: ft.Page): self.page = page
+        def open(self, *a, **k): pass
+        def close(self, *a, **k): pass
+        def refresh(self): pass
+    def build_alerts_bell(page: ft.Page, alerts_modal: AlertsModal):
+        return ft.IconButton(icon=ft.Icons.NOTIFICATIONS_NONE, tooltip="Alertas (indisponível)")
 
 # ---------------- SHIMS ----------------
 if not hasattr(ft, "colors"):
@@ -35,7 +45,9 @@ def _page_factory(module_name: str):
             return getattr(mod, fname)
     raise AttributeError(f"Módulo {module_name} não possui função fábrica compatível.")
 
-PAGES = {k: _page_factory(f"pages.{k}") for (k, _label, _icon) in NAV}
+# LAZY: guardamos só o nome do módulo; importamos quando precisar
+PAGES = {k: f"pages.{k}" for (k, _label, _icon) in NAV}
+_PAGE_BUILDERS_CACHE: dict[str, callable] = {}
 
 # --------- compat on_resize ----------
 def _install_resize_bridge(page: ft.Page):
@@ -43,8 +55,8 @@ def _install_resize_bridge(page: ft.Page):
         page.on_resize = None
     def _sync_dims():
         try:
-            page.window_height = getattr(page.window, "height", None) or getattr(page, "height", None)
-            page.window_width  = getattr(page.window, "width",  None) or getattr(page, "width",  None)
+            page.window_height = getattr(getattr(page, "window", None), "height", None) or getattr(page, "height", None)
+            page.window_width  = getattr(getattr(page, "window", None), "width",  None) or getattr(page, "width",  None)
         except Exception:
             pass
     prev = getattr(page, "on_resized", None)
@@ -92,10 +104,10 @@ def main(page: ft.Page):
     try: page.window_bgcolor = LIGHT_BG
     except Exception: pass
 
-    # --- Fallback: cria logo.ico multi-tamanhos a partir de uma imagem existente, se possível ---
+    # (opcional) gerar logo.ico a partir de imagem existente
     def _ensure_multi_size_ico(root_dir: Path) -> None:
         try:
-            from PIL import Image  # Pillow opcional
+            from PIL import Image
         except Exception:
             return
         try:
@@ -131,7 +143,7 @@ def main(page: ft.Page):
     def DIV():      return LIGHT_DIVIDER if page.theme_mode == ft.ThemeMode.LIGHT else DARK_DIVIDER
     def OVERLAY():  return LIGHT_OVERLAY if page.theme_mode == ft.ThemeMode.LIGHT else DARK_OVERLAY
 
-    # --------- LOGO DO TOPO (S.O.S Licitações) ---------
+    # --------- LOGO DO TOPO ---------
     logo_src, logo_h = None, 150
     if (here / "assets/icons/sos_licitacoes_256.png").exists():
         logo_src, logo_h = "assets/icons/sos_licitacoes_256.png", 150
@@ -142,7 +154,7 @@ def main(page: ft.Page):
     elif (here / "assets/icons/sos_licitacoes_48.png").exists():
         logo_src, logo_h = "assets/icons/sos_licitacoes_48.png", 48
     else:
-        logo_src, logo_h = "logo.png", 64  # fallback
+        logo_src, logo_h = "logo.png", 64
 
     # ---------- helpers compat ----------
     def _open_dialog(dlg: ft.AlertDialog):
@@ -199,11 +211,11 @@ def main(page: ft.Page):
     def _refresh_theme_button():
         theme_btn.icon = ft.Icons.WB_SUNNY if page.theme_mode == ft.ThemeMode.LIGHT else ft.Icons.DARK_MODE
 
-    # ---------- ALERTAS (instância do modal + sininho com badge) ----------
+    # ---------- ALERTAS (com fallback) ----------
     alerts_modal = AlertsModal(page)
     alerts_bell  = build_alerts_bell(page, alerts_modal)
 
-    # ---------- HEADER (mantém sininho) ----------
+    # ---------- HEADER ----------
     header = ft.Container(
         bgcolor= SURFACE(),
         padding=ft.padding.only(left=10, right=10, top=-35, bottom=-4),
@@ -219,7 +231,6 @@ def main(page: ft.Page):
                         ft.Text("PROGRAMA DE LICITAÇÃO", weight=ft.FontWeight.W_700, size=15),
                     ],
                 ),
-                # << mantém apenas o sininho aqui >>
                 ft.Row(controls=[alerts_bell]),
             ],
         ),
@@ -228,27 +239,45 @@ def main(page: ft.Page):
 
     # ---------- CONTEÚDO ----------
     host = ft.Container(expand=True)
-    content = ft.Container(expand=True, bgcolor=SURFACE(), padding=10, content=host)
+    content = ft.Container(expand=True, bgcolor= SURFACE(), padding=10, content=host)
+
+    def _get_page_builder(key: str):
+        if key in _PAGE_BUILDERS_CACHE:
+            return _PAGE_BUILDERS_CACHE[key]
+        try:
+            factory = _page_factory(PAGES[key])
+            _PAGE_BUILDERS_CACHE[key] = factory
+            return factory
+        except Exception as ex:
+            # devolve uma “página” de erro amigável em vez de derrubar o app
+            def _err(_page: ft.Page):
+                return ft.Container(
+                    padding=20,
+                    content=ft.Column(spacing=8, controls=[
+                        ft.Text(f"Falha ao carregar a página '{key}'.", weight=ft.FontWeight.W_700, color="#B00020"),
+                        ft.Text(str(ex), size=12),
+                    ])
+                )
+            _PAGE_BUILDERS_CACHE[key] = _err
+            return _err
 
     def _view_of(key: str):
+        builder = _get_page_builder(key)
         try:
-            v = PAGES[key](page)
+            v = builder(page)
         except Exception as ex:
-            v = ft.Container(padding=20, bgcolor=SURFACE(), content=ft.Text(f"Erro ao montar página '{key}': {ex}", color="#B00020"))
+            v = ft.Container(padding=20, bgcolor= SURFACE(), content=ft.Text(f"Erro ao montar página '{key}': {ex}", color="#B00020"))
         return v if isinstance(v, ft.Control) else ft.Column(controls=[v], expand=True)
 
     current_key = NAV[0][0]
 
     # ======== BARRA LATERAL (colapsável) ========
-    nav_collapsed = {"value": False}  # estado mutável simples
+    nav_collapsed = {"value": False}
 
     def _make_nav_button(key: str, label: str, icon):
-        # Quando colapsada: mostra só o ícone com tooltip
         if nav_collapsed["value"]:
             return ft.IconButton(
-                icon=icon,
-                tooltip=label,
-                icon_size=22,
+                icon=icon, tooltip=label, icon_size=22,
                 on_click=lambda e: render(key),
                 style=ft.ButtonStyle(overlay_color=OVERLAY(), padding=ft.padding.symmetric(6, 6)),
                 data=key,
@@ -272,11 +301,10 @@ def main(page: ft.Page):
     def _rebuild_nav_buttons():
         nav_buttons.controls = [_make_nav_button(k, lbl, ic) for (k, lbl, ic) in NAV]
 
-    # Toggle colapso
     def _toggle_sidebar(e=None):
         nav_collapsed["value"] = not nav_collapsed["value"]
         _rebuild_nav_buttons()
-        _apply_theme_colors()  # re-colore ícones/labels
+        _apply_theme_colors()
         _update_sidebar_width()
         page.update()
 
@@ -285,49 +313,41 @@ def main(page: ft.Page):
         on_click=_toggle_sidebar, style=ft.ButtonStyle(overlay_color=OVERLAY()),
     )
 
-    # Rodapé da barra: Tema + Sobre
     sidebar_footer = ft.Row(
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN if not nav_collapsed["value"] else ft.MainAxisAlignment.CENTER,
         controls=[theme_btn, about_btn],
     )
 
-    # Container da barra lateral
     sidebar = ft.Container(
         padding=ft.padding.all(10),
         content=ft.Column(
-            expand=True,
-            spacing=10,
+            expand=True, spacing=10,
             controls=[
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN if not nav_collapsed["value"] else ft.MainAxisAlignment.CENTER,
                     controls=[collapse_btn],
                 ),
                 nav_buttons,
-                ft.Container(expand=True),  # empurra o footer para baixo
+                ft.Container(expand=True),
                 sidebar_footer,
             ],
         ),
-        bgcolor=SURFACE(),
-        width=240,  # ajustado dinamicamente
+        bgcolor= SURFACE(),
+        width=240,
     )
 
-    # Área central: sidebar | divisor vertical | conteúdo
-    v_divider = ft.Container(width=1, bgcolor=LIGHT_DIVIDER, height=1)  # altura é ajustada pelo layout
-
+    v_divider = ft.Container(width=1, bgcolor= LIGHT_DIVIDER, height=1)
     body = ft.Row(expand=True, spacing=0, controls=[sidebar, v_divider, content])
 
-    # ---------- render / tema ----------
     def _update_sidebar_width():
         sidebar.width = 68 if nav_collapsed["value"] else 240
         collapse_btn.icon = ft.Icons.CHEVRON_RIGHT if nav_collapsed["value"] else ft.Icons.CHEVRON_LEFT
-        # alinhamento do footer
         sidebar_footer.alignment = ft.MainAxisAlignment.CENTER if nav_collapsed["value"] else ft.MainAxisAlignment.SPACE_BETWEEN
 
     def render(key: str):
         nonlocal current_key
         current_key = key
         host.content = _view_of(key)
-        # Atualiza seleção visual
         for btn in nav_buttons.controls:
             sel = (btn.data == current_key)
             if isinstance(btn, ft.TextButton):
@@ -337,7 +357,6 @@ def main(page: ft.Page):
                 lbl.color  = ACCENT() if sel else TXT()
                 icn.color  = ACCENT() if sel else TXT()
             else:
-                # IconButton (colapsado): só cor
                 btn.icon_color = ACCENT() if sel else TXT()
         try:
             alerts_bell.refresh_badge()
@@ -354,7 +373,6 @@ def main(page: ft.Page):
         header.bgcolor = SURFACE()
         title.color = TXT()
 
-        # Sidebar + botões
         sidebar.bgcolor = SURFACE()
         for btn in nav_buttons.controls:
             if isinstance(btn, ft.TextButton):
@@ -365,17 +383,12 @@ def main(page: ft.Page):
             elif isinstance(btn, ft.IconButton):
                 btn.icon_color = TXT()
 
-        # Footer da barra
         for b in (theme_btn, about_btn, collapse_btn):
             try: b.style.overlay_color = OVERLAY()
             except Exception: pass
 
-        # Divisor vertical
         v_divider.bgcolor = DIV()
-
-        # Conteúdo
         content.bgcolor = SURFACE()
-
         _refresh_theme_button()
 
     def toggle_theme(e=None):
@@ -397,13 +410,6 @@ def main(page: ft.Page):
     theme_btn.on_click = toggle_theme
     render(current_key)
 
-from pathlib import Path
-
 if __name__ == "__main__":
     ROOT = Path(__file__).resolve().parent
-    ft.app(
-        target=main,
-        view=ft.AppView.FLET_APP,
-        assets_dir=str(ROOT),
-        web_renderer="html",
-    )
+    ft.app(target=main, view=ft.AppView.FLET_APP, assets_dir=str(ROOT), web_renderer="html")
