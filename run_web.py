@@ -4,6 +4,20 @@ import os, sys, traceback
 from pathlib import Path
 import flet as ft
 
+import os, flet as ft
+
+def main(page: ft.Page):
+    # ===== DIAGNÓSTICO MÍNIMO (temporário) =====
+    if os.environ.get("APP_MINIMAL") == "1":
+        print("[APP] main() entrou (modo mínimo)", flush=True)
+        page.title = "SOS Licitações — Modo Mínimo"
+        page.add(ft.Container(padding=20, content=ft.Text("Minimal OK", size=20, weight=ft.FontWeight.W_700)))
+        page.update()
+        return
+    print("[APP] main() entrou (modo completo)", flush=True)
+    # ===== FIM DO BLOCO DE DIAGNÓSTICO =====
+
+
 def main():
     root = Path(__file__).resolve().parent
 
