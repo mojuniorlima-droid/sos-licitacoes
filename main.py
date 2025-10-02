@@ -1,4 +1,4 @@
-# main.py — start robusto para web (Render) mantendo seu layout
+# main.py — layout estável (header, tema/sobre, sidebar colapsável) para Flet 0.28.3
 from __future__ import annotations
 import os
 import traceback
@@ -96,15 +96,11 @@ def _view_of(key: str, page: ft.Page) -> ft.Control:
 
 # ---------- APP ----------
 def main(page: ft.Page):
-    # ===== DIAGNÓSTICO MÍNIMO (APP_MINIMAL=1) =====
     if os.environ.get("APP_MINIMAL") == "1":
-        print("[APP] main() entrou (modo mínimo)", flush=True)
         page.title = "SOS Licitações — Modo Mínimo"
         page.add(ft.Container(padding=20, content=ft.Text("Minimal OK", size=20, weight=ft.FontWeight.W_700)))
         page.update()
         return
-    print("[APP] main() entrou (modo completo)", flush=True)
-    # ===== FIM DIAGNÓSTICO =====
 
     here = Path(__file__).resolve().parent
     page.assets_dir = str(here)
@@ -144,19 +140,19 @@ def main(page: ft.Page):
     def DIV():      return LIGHT_DIVIDER if page.theme_mode == ft.ThemeMode.LIGHT else DARK_DIVIDER
     def OVERLAY():  return LIGHT_OVERLAY if page.theme_mode == ft.ThemeMode.LIGHT else DARK_OVERLAY
 
-    # Logo
+    # ---------- LOGO ----------
     if (here / "assets/icons/sos_licitacoes_256.png").exists():
-        logo_src, logo_h = "assets/icons/sos_licitacoes_256.png", 150
+        logo_src, logo_h = "assets/icons/sos_licitacoes_256.png", 48
     elif (here / "assets/icons/sos_licitacoes_128.png").exists():
-        logo_src, logo_h = "assets/icons/sos_licitacoes_128.png", 84
+        logo_src, logo_h = "assets/icons/sos_licitacoes_128.png", 48
     elif (here / "assets/icons/sos_licitacoes_64.png").exists():
-        logo_src, logo_h = "assets/icons/sos_licitacoes_64.png", 64
+        logo_src, logo_h = "assets/icons/sos_licitacoes_64.png", 40
     elif (here / "assets/icons/sos_licitacoes_48.png").exists():
-        logo_src, logo_h = "assets/icons/sos_licitacoes_48.png", 48
+        logo_src, logo_h = "assets/icons/sos_licitacoes_48.png", 40
     else:
-        logo_src, logo_h = "logo.png", 64
+        logo_src, logo_h = "logo.png", 40
 
-    # Ações topo
+    # ---------- AÇÕES DO TOPO ----------
     theme_btn = ft.IconButton(icon=ft.Icons.WB_SUNNY, tooltip="Alternar tema")
     about_btn = ft.IconButton(icon=ft.Icons.INFO, tooltip="Sobre")
     alerts_modal = AlertsModal(page)
@@ -192,34 +188,35 @@ def main(page: ft.Page):
     theme_btn.on_click = toggle_theme
     about_btn.on_click = open_about
 
-    # Header
+    # ---------- HEADER (sem paddings negativos) ----------
     header = ft.Container(
+        height=64,
         bgcolor= LIGHT_SURFACE,
-        padding=ft.padding.only(left=10, right=10, top=-35, bottom=-4),
+        padding=ft.padding.symmetric(horizontal=12, vertical=8),
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 ft.Row(
-                    spacing=5,
+                    spacing=8,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Image(src=logo_src, height=logo_h, fit=ft.ImageFit.CONTAIN, filter_quality=ft.FilterQuality.HIGH, tooltip="S.O.S Licitações"),
                         ft.Text("PROGRAMA DE LICITAÇÃO", weight=ft.FontWeight.W_700, size=15),
                     ],
                 ),
-                ft.Row(controls=[theme_btn, about_btn, alerts_bell]),
+                ft.Row(spacing=6, controls=[theme_btn, about_btn, alerts_bell]),
             ],
         ),
     )
     title = header.content.controls[0].controls[1]
 
-    # Conteúdo
+    # ---------- CONTEÚDO ----------
     host = ft.Container(expand=True)
     content = ft.Container(expand=True, bgcolor= LIGHT_SURFACE, padding=10, content=host)
     divider = ft.Container(height=1, bgcolor= LIGHT_DIVIDER)
 
-    # Sidebar
+    # ---------- SIDEBAR ----------
     nav_collapsed = {"value": False}
     collapse_btn = ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, tooltip="Recolher/Expandir menu")
 
@@ -232,14 +229,36 @@ def main(page: ft.Page):
             ),
             on_click=lambda e: render(key),
             content=ft.Row(
-                spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[ft.Icon(icon, size=22), ft.Text(label, size=14)],
             ),
         )
 
-    nav_buttons = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO)
+    # lista expande para ocupar o espaço
+    nav_buttons = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, expand=True)
+
     def _rebuild_nav_buttons():
         nav_buttons.controls = [_make_nav_button(k, lbl, ic) for (k, lbl, ic) in NAV]
+
+    welcome = ft.Text("Bem-vindo ao Programa de Licitação", size=13, weight=ft.FontWeight.W_600)
+    sub     = ft.Text("Escolha uma seção no menu", size=12)
+
+    sidebar_footer = ft.Row(
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        controls=[ft.Column(spacing=2, controls=[welcome, sub]), ft.Container(width=1)],
+    )
+
+    def _apply_sidebar():
+        # largura e alinhamentos
+        sidebar.width = 68 if nav_collapsed["value"] else 240
+        collapse_btn.icon = ft.Icons.CHEVRON_RIGHT if nav_collapsed["value"] else ft.Icons.CHEVRON_LEFT
+        sidebar_header.alignment = (
+            ft.MainAxisAlignment.CENTER if nav_collapsed["value"] else ft.MainAxisAlignment.SPACE_BETWEEN
+        )
+        # footer some quando colapsado
+        sidebar_footer.visible = not nav_collapsed["value"]
+        page.update()  # força repaint
 
     def _toggle_sidebar(e=None):
         nav_collapsed["value"] = not nav_collapsed["value"]
@@ -247,48 +266,34 @@ def main(page: ft.Page):
         _apply_theme_colors()
         _apply_sidebar()
 
-    def _apply_sidebar():
-        sidebar.width = 68 if nav_collapsed["value"] else 240
-        collapse_btn.icon = ft.Icons.CHEVRON_RIGHT if nav_collapsed["value"] else ft.Icons.CHEVRON_LEFT
-        sidebar_footer.alignment = ft.MainAxisAlignment.CENTER if nav_collapsed["value"] else ft.MainAxisAlignment.SPACE_BETWEEN
-
     collapse_btn.on_click = _toggle_sidebar
     _rebuild_nav_buttons()
 
-    welcome = ft.Text("Bem-vindo ao Programa de Licitação", size=14, weight=ft.FontWeight.W_600)
-    sub = ft.Text("Escolha uma seção no menu", size=12)
-
-    sidebar_footer = ft.Row(
-        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-        controls=[ft.Column(spacing=2, controls=[welcome, sub]), ft.Container(width=1)],
-    )
+    sidebar_header = ft.Row(controls=[collapse_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
     sidebar = ft.Container(
         padding=ft.padding.all(10),
+        bgcolor= LIGHT_SURFACE,
+        width=240,
         content=ft.Column(
             expand=True,
             spacing=10,
             controls=[
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN if not nav_collapsed["value"] else ft.MainAxisAlignment.CENTER,
-                    controls=[collapse_btn],
-                ),
+                sidebar_header,
                 nav_buttons,
-                ft.Container(expand=True),
                 sidebar_footer,
             ],
         ),
-        bgcolor= LIGHT_SURFACE,
-        width=240,
     )
 
-    # Root
+    # ---------- LAYOUT ROOT ----------
     current_key = NAV[0][0]
 
     def render(key: str):
         nonlocal current_key
         current_key = key
         host.content = _view_of(key, page)
+        # destaca item atual
         for btn in nav_buttons.controls:
             if not isinstance(btn, ft.TextButton):
                 continue
@@ -307,13 +312,19 @@ def main(page: ft.Page):
     root = ft.Container(
         expand=True,
         bgcolor= LIGHT_BG,
-        content=ft.Row(
+        content=ft.Column(
             spacing=0,
             controls=[
-                ft.Container(width=10),
-                ft.Container(width=240, content=ft.Column(spacing=0, controls=[header, divider, sidebar])),
-                ft.VerticalDivider(width=1, color= LIGHT_DIVIDER),
-                ft.Container(expand=True, content=content),
+                header,
+                divider,
+                ft.Row(
+                    spacing=0,
+                    controls=[
+                        sidebar,
+                        ft.VerticalDivider(width=1, color= LIGHT_DIVIDER),
+                        ft.Container(expand=True, content=content),
+                    ],
+                ),
             ],
         ),
     )
@@ -329,6 +340,7 @@ def main(page: ft.Page):
         title.color = TXT()
         welcome.color = TXT()
         sub.color = TXT_DIM()
+        # botões de navegação
         for btn in nav_buttons.controls:
             if isinstance(btn, ft.TextButton):
                 sel = (btn.data == current_key)
@@ -337,7 +349,8 @@ def main(page: ft.Page):
                 lbl.color  = ACCENT() if sel else TXT()
                 lbl.weight = ft.FontWeight.W_700 if sel else ft.FontWeight.W_400
                 icn.color  = ACCENT() if sel else TXT()
-        for b in (collapse_btn, about_btn, theme_btn, alerts_bell):
+        # ícones topo
+        for b in (collapse_btn, about_btn, theme_btn, ):
             try: b.icon_color = TXT()
             except Exception: pass
             try: b.style.overlay_color = OVERLAY()
@@ -347,14 +360,11 @@ def main(page: ft.Page):
     _apply_theme_colors()
     _apply_sidebar()
 
-    # ===== Render inicial imediato + captura de exceções =====
+    # ===== Render inicial com try/except =====
     try:
-        print("[APP] render inicial", flush=True)
         render(current_key)
-        print("[APP] render OK", flush=True)
     except Exception:
         err = traceback.format_exc()
-        print("[APP][EXC] durante render inicial:\n" + err, flush=True)
         host.content = ft.Container(padding=20, content=ft.Text(err, color="#B00020", selectable=True))
         page.update()
 
@@ -363,6 +373,5 @@ if __name__ == "__main__":
     ft.app(
         target=main,
         view=ft.AppView.FLET_APP,
-        assets_dir=str(ROOT),   # ok manter para seus assets
-        # não force web_renderer aqui
+        assets_dir=str(ROOT),
     )
