@@ -4,6 +4,7 @@ import os
 import traceback
 from pathlib import Path
 import importlib
+import asyncio
 import flet as ft
 
 # ---------- TEMA E CORES ----------
@@ -182,7 +183,8 @@ def main(page: ft.Page):
             actions=[ft.TextButton("Fechar")],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        dlg.actions[0].on_click = lambda ev: setattr(dlg, "open", False) | page.update()
+        # <<< CORRIGIDO: usar 'or', não '|'
+        dlg.actions[0].on_click = lambda ev: setattr(dlg, "open", False) or page.update()
         page.dialog = dlg; dlg.open = True; page.update()
 
     def toggle_theme(e=None):
@@ -348,8 +350,9 @@ def main(page: ft.Page):
     _apply_sidebar()
 
     # ===== Render inicial adiado + captura de exceções =====
-    def _safe_render_inicial():
+    async def _safe_render_inicial():
         try:
+            await asyncio.sleep(0)  # entrega o loop antes de renderizar
             print("[APP] render inicial", flush=True)
             render(current_key)
             print("[APP] render OK", flush=True)
@@ -359,7 +362,7 @@ def main(page: ft.Page):
             host.content = ft.Container(padding=20, content=ft.Text(err, color="#B00020", selectable=True))
             page.update()
 
-    # Compatível com Flet 0.28.3
+    # Compatível com Flet 0.28.3: run_task espera coroutine
     page.run_task(_safe_render_inicial)
 
 if __name__ == "__main__":
