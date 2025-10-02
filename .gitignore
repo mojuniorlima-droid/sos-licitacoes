@@ -39,3 +39,20 @@ storage/
 
 # Uploads de usuário (não versionar PDF/arquivos grandes)
 uploads/
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# Env local
+.env
+
+# Build/artefatos locais
+.edital_index/
+uploads/
+exports/
+app.db
+data.db
+start_app.log
