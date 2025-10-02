@@ -2,12 +2,39 @@
 from __future__ import annotations
 
 import flet as ft
-import services.db as db
-from components.tableview import SimpleTable
-from components.forms import (
-    FieldRow, snack_ok, snack_err, text_input, email_input, phone_input, cep_input, uf_input
-)
-from components.inputs import cnpj_input, cpf_input
+
+# --- Imports tolerantes ---
+try:
+    import services.db as db
+except Exception:
+    class _DBStub: ...
+    db = _DBStub()
+
+try:
+    from components.tableview import SimpleTable
+except Exception:
+    class SimpleTable(ft.UserControl):
+        def build(self): return ft.Container(ft.Text("Tabela indisponível"))
+
+try:
+    from components.forms import (
+        FieldRow, snack_ok, snack_err, text_input, email_input, phone_input, cep_input, uf_input
+    )
+except Exception:
+    class FieldRow(ft.Row): ...
+    def snack_ok(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def snack_err(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def text_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def email_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def phone_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def cep_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def uf_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+
+try:
+    from components.inputs import cnpj_input, cpf_input
+except Exception:
+    def cnpj_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def cpf_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
 
 BASE_DESCONTO = 240
 COLUMNS = ["ID", "Nome", "CNPJ", "Telefone", "E-mail", "Cidade", "UF"]

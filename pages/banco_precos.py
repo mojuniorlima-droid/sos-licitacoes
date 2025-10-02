@@ -1,12 +1,42 @@
 # pages/banco_precos.py — Banco de Preços (scroll H/V, máscara Preço, Calculadora de Margens em lote + exports via FilePicker)
 from __future__ import annotations
+
 import flet as ft
 
-from services.exports import export_csv, export_xlsx
-from services import db
-from components.tableview import SimpleTable
-from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input, money_input
-from components.margem_calc import open_margem_calc_dialog
+# --- Imports tolerantes para web ---
+try:
+    from services.exports import export_csv, export_xlsx
+except Exception:
+    def export_csv(*a, **k): return False
+    def export_xlsx(*a, **k): return False
+
+try:
+    from services import db
+except Exception:
+    class _DBStub: ...
+    db = _DBStub()
+
+try:
+    from components.tableview import SimpleTable
+except Exception:
+    class SimpleTable(ft.UserControl):
+        def build(self): return ft.Container(ft.Text("Tabela indisponível"))
+
+try:
+    from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input, money_input
+except Exception:
+    class FieldRow(ft.Row): ...
+    def snack_ok(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def snack_err(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def text_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def date_input(label="", value="", **k): return ft.TextField(value=value, label=label)
+    def money_input(value="", label="", width=None, **k): return ft.TextField(value=str(value), label=label, width=width)
+
+try:
+    from components.margem_calc import open_margem_calc_dialog
+except Exception:
+    def open_margem_calc_dialog(page, *a, **k):
+        snack_err(page, "Calculadora indisponível no ambiente web.")
 
 BASE_DESCONTO = 240
 

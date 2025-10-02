@@ -5,9 +5,27 @@ import shutil
 import urllib.parse
 from datetime import datetime
 
-from services import db
-from components.tableview import SimpleTable
-from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input
+# --- Imports tolerantes ---
+try:
+    from services import db
+except Exception:
+    class _DBStub: ...
+    db = _DBStub()
+
+try:
+    from components.tableview import SimpleTable
+except Exception:
+    class SimpleTable(ft.UserControl):
+        def build(self): return ft.Container(ft.Text("Tabela indisponível"))
+
+try:
+    from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input
+except Exception:
+    class FieldRow(ft.Row): ...
+    def snack_ok(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def snack_err(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def text_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def date_input(label="", value="", **k): return ft.TextField(value=value, label=label)
 
 # ----------------- Config -----------------
 BASE_DESCONTO = 240

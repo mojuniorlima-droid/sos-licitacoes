@@ -4,7 +4,22 @@ import os, threading, shutil, tempfile
 import flet as ft
 
 def _svc_resolver():
-    from services import edital_ia as svc
+    try:
+        from services import edital_ia as svc
+    except Exception:
+        class _SvcStub:
+            def list_indexed_docs(self): return []
+            def list_docs(self): return []
+            def list(self): return []
+            def index_pdf(self, *a, **k): return False
+            def ingest_pdf(self, *a, **k): return False
+            def clear_index(self): return False
+            def clear(self): return False
+            def ask(self, *a, **k): return "IA indisponível no ambiente web."
+            def query(self, *a, **k): return "IA indisponível no ambiente web."
+            def last_sources(self): return []
+            def get_sources(self): return []
+        svc = _SvcStub()
     def pick(*names):
         for n in names:
             if hasattr(svc, n):
