@@ -3,11 +3,28 @@ from __future__ import annotations
 import flet as ft
 from typing import List, Dict, Any
 
-import services.pncp as pncp
-from services.exports import export_csv, export_xlsx
-from components.tableview import SimpleTable
+# 🔒 PNCP
+try:
+    import services.pncp as pncp
+except Exception:
+    class _PNCPStub:
+        def buscar(self, *a, **k): return []
+    pncp = _PNCPStub()
 
-import flet as ft
+# 🔒 exports
+try:
+    from services.exports import export_csv, export_xlsx
+except Exception:
+    def export_csv(*a, **k): return False
+    def export_xlsx(*a, **k): return False
+
+# 🔒 SimpleTable
+try:
+    from components.tableview import SimpleTable
+except Exception:
+    class SimpleTable(ft.UserControl):
+        def build(self): return ft.Container(ft.Text("Tabela indisponível"))
+
 
 def build(page: ft.Page):
     return ft.Container(

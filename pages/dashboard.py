@@ -1,7 +1,16 @@
-# pages/dashboard.py (hotfix start seguro no Render)
+# pages/dashboard.py
+# topo do arquivo
 from __future__ import annotations
 import flet as ft
 from datetime import date, datetime
+
+# 🔒 DB à prova de falha (não muda layout)
+try:
+    import services.db as db
+except Exception:
+    class _DBStub: ...
+    db = _DBStub()
+
 
 # ========= Config / Helpers =========
 _CER_THRESH = {"leve": 15, "moderado": 7, "pesado": 1}
@@ -20,19 +29,17 @@ def _pdate(s: str):
 def _today() -> date:
     return date.today()
 
-# === acesso ao DB com import lazy e tolerante ===
-def _db():
-    try:
-        import services.db as db
-        return db
-    except Exception:
-        return None
+def _nivel_por_dias(dias: int, mapa: dict) -> str | None:
+    if dias <= mapa["pesado"]:
+        return "pesado"
+    if dias <= mapa["moderado"]:
+        return "moderado"
+    if dias <= mapa["leve"]:
+        return "leve"
+    return None
 
-def _safe_call(fn_name: str, default):
-    mod = _db()
-    if not mod:
-        return default
-    fn = getattr(mod, fn_name, None)
+def _safe_call(name: str, default):
+    fn = getattr(db, name, None)
     if not callable(fn):
         return default
     try:
@@ -41,7 +48,6 @@ def _safe_call(fn_name: str, default):
         return default
 
 def _count_try(list_names: list[str], count_names: list[str]) -> int:
-    # tenta primeiro funções de contagem, depois lista e len()
     for nm in count_names:
         v = _safe_call(nm, None)
         if v is not None:
@@ -57,15 +63,6 @@ def _count_try(list_names: list[str], count_names: list[str]) -> int:
             except Exception:
                 pass
     return 0
-
-def _nivel_por_dias(dias: int, mapa: dict) -> str | None:
-    if dias <= mapa["pesado"]:
-        return "pesado"
-    if dias <= mapa["moderado"]:
-        return "moderado"
-    if dias <= mapa["leve"]:
-        return "leve"
-    return None
 
 def _join_text(*parts: str) -> str:
     parts = [p for p in parts if p and str(p).strip()]
@@ -95,23 +92,45 @@ def _recent_box(title, rows, icon, surface, border, text_dim, min_h=_CARD_MIN_H)
         items.append(
             ft.Row(
                 spacing=8,
-                controls=[ft.Icon(icon, size=16, color="#546E7A"),
-                          ft.Text(nome, size=12, color=text_dim, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(icon, size=16, color="#546E7A"),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Text(nome, size=12, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    ),
+                ],
             )
         )
     if not items:
         items = [ft.Text("— nenhum registro —", italic=True, size=12, color=text_dim)]
+    header = ft.Text(title, weight=ft.FontWeight.BOLD, size=13)
+    controls_list = [header] + items
     return ft.Container(
-        bgcolor=surface, border_radius=12, border=ft.border.all(1, border), padding=12, height=min_h,
-        content=ft.Column(spacing=8, controls=[ft.Text(title, weight=ft.FontWeight.BOLD, size=13)] + items),
+        bgcolor=surface,
+        border_radius=12,
+        border=ft.border.all(1, border),
+        padding=12,
+        height=min_h,
+        content=ft.Column(
+            spacing=8,
+            controls=controls_list,
+        ),
     )
 
 def _info_box(title: str, message: str, surface, border, text_dim, min_h=_CARD_MIN_H):
     header = ft.Text(title, weight=ft.FontWeight.BOLD, size=13)
     body = ft.Text(message, size=12, color=text_dim)
     return ft.Container(
-        bgcolor=surface, border_radius=12, border=ft.border.all(1, border), padding=12, height=min_h,
-        content=ft.Column(spacing=8, controls=[header, body]),
+        bgcolor=surface,
+        border_radius=12,
+        border=ft.border.all(1, border),
+        padding=12,
+        height=min_h,
+        content=ft.Column(
+            spacing=8,
+            controls=[header, body],
+        ),
     )
 
 def _kpis_row(n_emp, n_cer, n_lic):
@@ -126,47 +145,74 @@ def _kpis_row(n_emp, n_cer, n_lic):
                         controls=[ft.Text(title, color="#FFFFFF", size=12, weight=ft.FontWeight.BOLD),
                                   ft.Icon(icon, color="#FFFFFF", size=20)],
                     ),
-                    ft.Text(str(value), color="#FFFFFF", size=24, weight=ft.FontWeight.W_800),
-                    ft.Text(note or "", color="#E3F2FD", size=11),
+                    ft.Text(str(value), color="#FFFFFF", size=24, weight=ft.FontWeight.BOLD),
+                    ft.Text(note or "", color="#FFFFFF", size=10),
                 ],
             ),
         )
-    return ft.Row(spacing=10, controls=[
-        _card_kpi("Empresas", n_emp, ft.Icons.BUSINESS, "#0D47A1"),
-        _card_kpi("Certidões", n_cer, ft.Icons.VERIFIED, "#1565C0", "vencendo/hoje"),
-        _card_kpi("Licitações", n_lic, ft.Icons.DESCRIPTION, "#1976D2", "próximas"),
-    ])
+    return ft.Row(
+        spacing=12,
+        controls=[
+            _card_kpi("Empresas",      n_emp, ft.Icons.BUSINESS,     "#1565C0"),
+            _card_kpi("Certidões",     n_cer, ft.Icons.VERIFIED,     "#2E7D32"),
+            _card_kpi("Licitações",    n_lic, ft.Icons.DESCRIPTION,  "#4527A0"),
+            _card_kpi("Oportunidades", "—",   ft.Icons.WORK_HISTORY, "#EF6C00", note="Disp. na 1.0.1"),
+        ],
+    )
 
-# ========= Coleta dos dados =========
-def _recentes_empresas():
-    return (_safe_call("empresas_recent", None) or
-            _safe_call("empresas_list", None)   or
-            _safe_call("get_empresas", None)    or
-            [])[:5]
+# ========= Dados =========
+def _recentes_empresas(limit=5):
+    rows = (_safe_call("list_empresas", []) or
+            _safe_call("empresas_all", []) or
+            _safe_call("list_companies", []) or
+            _safe_call("companies_all", []) or
+            [])
+    try:
+        rows = sorted(rows, key=lambda r: ((r.get("created_at") or ""), (r.get("id") or 0)), reverse=True)
+    except Exception:
+        try:
+            rows = sorted(rows, key=lambda r: (r.get("id") or 0), reverse=True)
+        except Exception:
+            pass
+    return [{"id": r.get("id"), "nome": (r.get("name") or r.get("nome") or f"Empresa #{r.get('id')}")} for r in rows[:limit]]
 
-def _recentes_licitacoes():
-    return (_safe_call("licitacoes_recent", None) or
-            _safe_call("list_licitacoes", None)   or
-            _safe_call("get_licitacoes", None)    or
-            [])[:8]
+def _recentes_licitacoes(limit=12):
+    rows = _safe_call("list_licitacoes", []) or _safe_call("licitacoes_all", []) or []
+    try:
+        rows = sorted(rows, key=lambda r: ((r.get("created_at") or ""), (r.get("id") or 0)), reverse=True)
+    except Exception:
+        try:
+            rows = sorted(rows, key=lambda r: (r.get("id") or 0), reverse=True)
+        except Exception:
+            pass
+    out = []
+    for r in rows[:limit]:
+        titulo = _join_text(r.get("orgao",""), r.get("processo") or r.get("modalidade",""))
+        out.append({"id": r.get("id"), "nome": (titulo or f"Licit. #{r.get('id')}")})
+    return out
 
 def _alertas_certidoes():
-    rows = (_safe_call("certidoes_list_alertas", None) or
-            _safe_call("list_certidoes", None)         or
-            _safe_call("get_certidoes", None)          or
-            [])
+    prontos = _safe_call("certidoes_expirando", None)
+    if isinstance(prontos, list) and prontos:
+        return prontos
+    certs = (_safe_call("list_certidoes", []) or
+             _safe_call("certidoes_all", []) or
+             _safe_call("get_certidoes", []) or
+             [])
     hoje = _today()
     out = []
-    for r in rows:
-        validade = r.get("validade") or r.get("data_validade") or r.get("vencimento")
-        empresa = r.get("empresa_nome") or r.get("empresa") or "Empresa"
-        tipo    = r.get("tipo") or r.get("certidao") or "Certidão"
-        d = _pdate(validade or "")
-        if not d:
+    for r in certs:
+        validade = r.get("validade") or r.get("dt_validade") or r.get("vencimento") or ""
+        dv = _pdate(validade)
+        if not dv:
             continue
-        dias = (d - hoje).days
+        dias = (dv - hoje).days
+        nivel = _nivel_por_dias(dias, _CER_THRESH)
+        if nivel is None and dias >= 0:
+            continue
+        empresa = r.get("empresa") or r.get("razao") or r.get("nome") or ""
+        tipo = r.get("tipo") or r.get("certidao") or ""
         if dias >= 0:
-            nivel = _nivel_por_dias(dias, _CER_THRESH)
             desc = f"{empresa} – {tipo} vence em {dias}d ({validade})"
             nivel_out = (nivel or "leve")
         else:
@@ -182,8 +228,8 @@ def _alertas_licitacoes():
     if isinstance(prontos, list) and prontos:
         return prontos
     rows = (_safe_call("list_licitacoes", []) or
-            _safe_call("licitacoes_all", [])   or
-            _safe_call("get_licitacoes", [])   or
+            _safe_call("licitacoes_all", []) or
+            _safe_call("get_licitacoes", []) or
             [])
     hoje = _today()
     out = []
@@ -198,107 +244,165 @@ def _alertas_licitacoes():
         nivel = _nivel_por_dias(dias, _LIC_THRESH)
         if nivel is None:
             continue
-        emp = r.get("empresa_nome") or r.get("empresa") or ""
-        obj = r.get("objeto") or r.get("titulo") or ""
-        out.append({
-            "descricao": _join_text(obj, f"em {dias}d"),
-            "nivel": nivel,
-            "dias": dias,
-            "empresa": emp,
-        })
-    out.sort(key=lambda x: (x.get("dias", 999), x.get("descricao","")))
-    return out[:6]
+        orgao = r.get("orgao") or ""
+        processo = r.get("processo") or ""
+        hora = r.get("hora") or ""
+        obj = (r.get("objeto") or "").strip()
+        titulo = obj if obj else _join_text(orgao, processo)
+        texto = f"{titulo} — sessão em {ds.strftime('%d/%m/%Y')} {hora} (em {dias}d)"
+        out.append({"objeto": texto, "dias": dias, "nivel": nivel})
+    out.sort(key=lambda x: ({"pesado":0,"moderado":1,"leve":2}.get(x.get("nivel"), 9), x.get("dias", 999)))
+    return out
 
 # ========= Página =========
 def build(page: ft.Page) -> ft.Control:
-    # Cores seguem seu padrão aprovado (LIGHT/DARK definidos no main)
-    surface = "#FFFFFF" if page.theme_mode == ft.ThemeMode.LIGHT else "#101826"
-    border  = "#E0E0E0" if page.theme_mode == ft.ThemeMode.LIGHT else "#2A3A50"
-    text    = "#222222" if page.theme_mode == ft.ThemeMode.LIGHT else "#EAF2FF"
-    text_dim= "#666666" if page.theme_mode == ft.ThemeMode.LIGHT else "#B7C1D6"
+    light = (page.theme_mode == ft.ThemeMode.LIGHT)
+    surface = "#FFFFFF" if light else "#101826"
+    border = "#E0E0E0" if light else "#1E2A3B"
+    text_dim = "#616161" if light else "#90A4AE"
 
-    # KPIs
-    n_emp = _count_try(["empresas_list","get_empresas"], ["empresas_count"])
-    n_cer = len([a for a in _alertas_certidoes() if a.get("nivel") in {"pesado","moderado","leve"}])
-    n_lic = len(_alertas_licitacoes())
+    n_emp = _count_try(
+        ["list_empresas", "empresas_all", "list_companies", "companies_all", "get_empresas"],
+        ["count_empresas", "empresas_count", "count_companies"]
+    )
+    n_cer = _count_try(
+        ["list_certidoes", "certidoes_all", "get_certidoes"],
+        ["count_certidoes", "certidoes_count"]
+    )
+    n_lic = _count_try(
+        ["list_licitacoes", "licitacoes_all", "get_licitacoes"],
+        ["count_licitacoes", "licitacoes_count"]
+    )
+
+    recentes_emp = _recentes_empresas()
+    recentes_lic = _recentes_licitacoes(limit=12)
+
+    # listas de alertas (texto não vaza)
+    cert_list_controls = []
+    for c in _alertas_certidoes() or []:
+        cert_list_controls.append(
+            ft.Row(
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(ft.Icons.WARNING_AMBER, size=16, color="#FFB300"),
+                    ft.Container(expand=True, content=ft.Text(c.get("descricao",""), size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)),
+                    _badge(c.get("nivel","")),
+                ],
+            )
+        )
+    if not cert_list_controls:
+        cert_list_controls = [ft.Text("— nenhum alerta —", italic=True, color=text_dim)]
+
+    lic_list_controls = []
+    for l in _alertas_licitacoes() or []:
+        lic_list_controls.append(
+            ft.Row(
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(ft.Icons.EVENT, size=16, color="#64B5F6"),
+                    ft.Container(expand=True, content=ft.Text(l.get("objeto",""), size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)),
+                    _badge(l.get("nivel","")),
+                ],
+            )
+        )
+    if not lic_list_controls:
+        lic_list_controls = [ft.Text("— nenhum alerta —", italic=True, color=text_dim)]
 
     kpis = _kpis_row(n_emp, n_cer, n_lic)
 
-    # Coluna esquerda: empresas recentes + info oportunidades + certidões
-    recentes_emp = _recentes_empresas()
-    box_emp = _recent_box("Empresas recentes", recentes_emp, ft.Icons.BUSINESS, surface, border, text_dim)
+    # ESQUERDA: Empresas (em cima) + Oportunidades da semana (embaixo)
+    left_grid = ft.Column(
+        spacing=12,
+        controls=[
+            _recent_box("Empresas recentes", recentes_emp, ft.Icons.BUSINESS, surface, border, text_dim),
+            _info_box(
+                "Oportunidades da semana",
+                "Integração prevista na versão 1.0.1 — exibirá oportunidades filtradas e atualizadas.",
+                surface, border, text_dim
+            ),
+        ],
+    )
 
-    certs = _alertas_certidoes()
-    if certs:
-        cert_rows = []
-        for c in certs[:6]:
-            cert_rows.append(
-                ft.Row(
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        _badge(c.get("nivel")),
-                        ft.Text(c.get("descricao",""), size=12, color=text_dim, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    ],
-                )
-            )
-        box_certs = ft.Container(
-            bgcolor=surface, border_radius=12, border=ft.border.all(1, border), padding=12, height=_CARD_MIN_H,
-            content=ft.Column(spacing=8, controls=[ft.Text("Certidões em alerta", weight=ft.FontWeight.BOLD, size=13)] + cert_rows),
-        )
-    else:
-        box_certs = _info_box("Certidões em alerta", "Nenhuma certidão em alerta no momento.", surface, border, text_dim)
-
-    box_oport = _info_box("Oportunidades da semana",
-                          "Integração prevista na versão 1.0.1 — exibirá oportunidades filtradas e atualizadas.",
-                          surface, border, text_dim)
-
-    left_column = ft.Column(spacing=12, expand=True, controls=[box_emp, box_oport, box_certs])
-
-    # Direita: alertas licitações + licitações recentes
-    lic_alerts = _alertas_licitacoes()
-    if lic_alerts:
-        alert_rows = []
-        for a in lic_alerts:
-            alert_rows.append(
-                ft.Row(
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        _badge(a.get("nivel")),
-                        ft.Text(a.get("descricao",""), size=12, color=text_dim, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    ],
-                )
-            )
-        right_alerts = ft.Container(
-            bgcolor=surface, border_radius=12, border=ft.border.all(1, border), padding=12, height=_CARD_MIN_H,
-            content=ft.Column(spacing=8, controls=[ft.Text("Alertas de licitações", weight=ft.FontWeight.BOLD, size=13)] + alert_rows),
-        )
-    else:
-        right_alerts = _info_box("Alertas de licitações", "Nenhum alerta para os próximos dias.", surface, border, text_dim)
-
-    recentes_lic = _recentes_licitacoes()
+    # DIREITA: Licitações recentes ocupando duas caixas (altura dupla)
     lic_items = []
-    for r in recentes_lic[:10]:
-        titulo = r.get("objeto") or r.get("titulo") or r.get("processo") or "Licitação"
+    for item in recentes_lic:
         lic_items.append(
             ft.Row(
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[ft.Icon(ft.Icons.DESCRIPTION, size=16, color="#546E7A"),
-                          ft.Text(titulo, size=12, color=text_dim, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)],
+                controls=[
+                    ft.Icon(ft.Icons.DESCRIPTION, size=16, color="#546E7A"),
+                    ft.Container(expand=True, content=ft.Text(item["nome"], size=12, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ],
             )
         )
     if not lic_items:
         lic_items = [ft.Text("— nenhum registro —", italic=True, size=12, color=text_dim)]
-    lic_box = ft.Container(
-        bgcolor=surface, border_radius=12, border=ft.border.all(1, border), padding=12, height=_CARD_MIN_H*2,
-        content=ft.Column(spacing=8, controls=[ft.Text("Licitações recentes", weight=ft.FontWeight.BOLD, size=13)] + lic_items),
+    lic_header = ft.Text("Licitações recentes", weight=ft.FontWeight.BOLD, size=13)
+    lic_controls = [lic_header] + lic_items
+
+    right_grid = ft.Container(
+        expand=True,
+        content=ft.Container(
+            bgcolor=surface,
+            border_radius=12,
+            border=ft.border.all(1, border),
+            padding=12,
+            height=_CARD_MIN_H * 2 + 12,  # 2 caixas + espaçamento
+            content=ft.Column(
+                spacing=8,
+                controls=lic_controls,
+            ),
+        ),
     )
 
-    right_column = ft.Column(spacing=12, expand=True, controls=[right_alerts, lic_box])
+    grid_row = ft.Row(
+        spacing=12,
+        vertical_alignment=ft.CrossAxisAlignment.START,
+        controls=[
+            ft.Container(expand=True, content=left_grid),
+            right_grid,
+        ],
+    )
 
-    return ft.Container(
+    # Coluna principal + painel de alertas
+    left_column = ft.Container(
+        expand=True, bgcolor=surface,
+        content=ft.Column(
+            spacing=12,
+            controls=[
+                ft.Text("Início", size=18, weight=ft.FontWeight.BOLD),
+                kpis,
+                grid_row,
+            ],
+        ),
+    )
+
+    right_alerts = ft.Container(
+        width=360,
+        bgcolor=surface,
+        border_radius=12,
+        border=ft.border.all(1, border),
+        padding=12,
+        content=ft.Column(spacing=12, controls=[
+            ft.Text("Alertas", size=16, weight=ft.FontWeight.BOLD),
+            ft.Text("Certidões (≤15d leve • ≤7d moderado • ≤1d urgente)", size=12, color=text_dim),
+            ft.Column(spacing=8, controls=cert_list_controls),
+            ft.Divider(),
+            ft.Text("Licitações (≤7d leve • ≤3d moderado • ≤1d urgente)", size=12, color=text_dim),
+            ft.Column(spacing=8, controls=lic_list_controls),
+        ]),
+    )
+
+    return ft.Stack(
         expand=True,
-        content=ft.Row(spacing=12, controls=[left_column, right_column]),
+        controls=[
+            ft.Container(expand=True, bgcolor=surface),
+            ft.Container(
+                expand=True, bgcolor=surface, padding=0,
+                content=ft.Row(spacing=12, controls=[left_column, right_alerts]),
+            ),
+        ],
     )

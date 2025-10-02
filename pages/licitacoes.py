@@ -1,9 +1,32 @@
 # pages/licitacoes.py
 from __future__ import annotations
 import flet as ft
-import services.db as db
-from components.tableview import SimpleTable
-from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input
+
+# 🔒 DB
+try:
+    import services.db as db
+except Exception:
+    class _DBStub: ...
+    db = _DBStub()
+
+# 🔒 SimpleTable
+try:
+    from components.tableview import SimpleTable
+except Exception:
+    class SimpleTable(ft.UserControl):
+        def __init__(self, *a, **k): super().__init__()
+        def build(self): return ft.Container(ft.Text("Tabela indisponível"))
+
+# 🔒 Forms (text_input, date_input, FieldRow, snack_ok/err)
+try:
+    from components.forms import FieldRow, snack_ok, snack_err, text_input, date_input
+except Exception:
+    class FieldRow(ft.Row): ...
+    def snack_ok(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def snack_err(page, msg): page.snack_bar = ft.SnackBar(ft.Text(msg)); page.snack_bar.open = True; page.update()
+    def text_input(value="", label="", width=None, **k): return ft.TextField(value=value, label=label, width=width)
+    def date_input(label="", value="", **k): return ft.TextField(value=value, label=label)
+
 
 BASE_DESCONTO = 240
 COLUMNS = [
