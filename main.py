@@ -45,7 +45,7 @@ def _page_factory(module_name: str):
             return getattr(mod, fname)
     raise AttributeError(f"Módulo {module_name} não possui função fábrica compatível.")
 
-# LAZY: guardamos só o nome do módulo; importamos quando precisar
+# LAZY: só guardo o nome do módulo e importo quando precisar
 PAGES = {k: f"pages.{k}" for (k, _label, _icon) in NAV}
 _PAGE_BUILDERS_CACHE: dict[str, callable] = {}
 
@@ -75,21 +75,10 @@ def _install_resize_bridge(page: ft.Page):
     page.on_resized = _bridge
 
 # ---------- PALETA ----------
-LIGHT_BG        = "#FFFFFF"
-LIGHT_SURFACE   = "#FFFFFF"
-LIGHT_TEXT      = "#222222"
-LIGHT_TEXT_DIM  = "#666666"
-LIGHT_ACCENT    = "#0D47A1"
-LIGHT_DIVIDER   = "#E0E0E0"
-LIGHT_OVERLAY   = "#E0E0E0"
-
-DARK_BG         = "#0B1220"
-DARK_SURFACE    = "#101826"
-DARK_TEXT       = "#EAF2FF"
-DARK_TEXT_DIM   = "#B7C1D6"
-DARK_ACCENT     = "#4EA1FF"
-DARK_DIVIDER    = "#2A3A50"
-DARK_OVERLAY    = "#1E2A3B"
+LIGHT_BG, LIGHT_SURFACE, LIGHT_TEXT, LIGHT_TEXT_DIM = "#FFFFFF", "#FFFFFF", "#222222", "#666666"
+LIGHT_ACCENT, LIGHT_DIVIDER, LIGHT_OVERLAY = "#0D47A1", "#E0E0E0", "#E0E0E0"
+DARK_BG, DARK_SURFACE, DARK_TEXT, DARK_TEXT_DIM = "#0B1220", "#101826", "#EAF2FF", "#B7C1D6"
+DARK_ACCENT, DARK_DIVIDER, DARK_OVERLAY = "#4EA1FF", "#2A3A50", "#1E2A3B"
 
 # ---------- APP ----------
 def main(page: ft.Page):
@@ -104,7 +93,7 @@ def main(page: ft.Page):
     try: page.window_bgcolor = LIGHT_BG
     except Exception: pass
 
-    # (opcional) gerar logo.ico a partir de imagem existente
+    # (opcional) gerar logo.ico se não existir
     def _ensure_multi_size_ico(root_dir: Path) -> None:
         try:
             from PIL import Image
@@ -156,18 +145,15 @@ def main(page: ft.Page):
     else:
         logo_src, logo_h = "logo.png", 64
 
-    # ---------- helpers compat ----------
+    # ---------- helpers de diálogo ----------
     def _open_dialog(dlg: ft.AlertDialog):
-        try:
-            page.open(dlg)
+        try: page.open(dlg)
         except Exception:
             page.dialog = dlg
             dlg.open = True
             page.update()
-
     def _close_dialog(dlg: ft.AlertDialog):
-        try:
-            page.close(dlg)
+        try: page.close(dlg)
         except Exception:
             dlg.open = False
             page.update()
@@ -189,24 +175,21 @@ def main(page: ft.Page):
                     ft.Text("Programa de Licitação — S.O.S Tech", size=16, weight=ft.FontWeight.W_600, text_align=ft.TextAlign.CENTER),
                     ft.Text("Versão: 1.0.0", size=14, text_align=ft.TextAlign.CENTER),
                     ft.Text("Desenvolvido por: Fabio Júnior", size=14, text_align=ft.TextAlign.CENTER),
-                    ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=6, controls=[ft.Icon(ft.Icons.LINK, size=18, color=ft.colors.BLUE), ft.Text("Instagram: @s.o.s_teech", size=14)]),
-                    ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=6, controls=[ft.Icon(ft.Icons.PHONE, size=18, color=ft.colors.GREEN), ft.Text("WhatsApp: (91) 93300-2999", size=14)]),
+                    ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=6,
+                           controls=[ft.Icon(ft.Icons.LINK, size=18, color=ft.colors.BLUE), ft.Text("Instagram: @s.o.s_teech", size=14)]),
+                    ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=6,
+                           controls=[ft.Icon(ft.Icons.PHONE, size=18, color=ft.colors.GREEN), ft.Text("WhatsApp: (91) 93300-2999", size=14)]),
                 ],
             ),
         )
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Sobre o Programa", weight=ft.FontWeight.W_700, size=18, text_align=ft.TextAlign.CENTER),
-            content=body,
-            actions=[ft.TextButton("Fechar")],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
+        dlg = ft.AlertDialog(modal=True, title=ft.Text("Sobre o Programa", weight=ft.FontWeight.W_700, size=18, text_align=ft.TextAlign.CENTER),
+                             content=body, actions=[ft.TextButton("Fechar")], actions_alignment=ft.MainAxisAlignment.END)
         dlg.actions[0].on_click = lambda ev: _close_dialog(dlg)
         _open_dialog(dlg)
 
     about_btn = ft.IconButton(icon=ft.Icons.INFO, tooltip="Sobre", on_click=open_about)
 
-    # ---------- BOTÃO TEMA ----------
+    # ---------- THEME ----------
     theme_btn = ft.IconButton(icon=ft.Icons.WB_SUNNY, tooltip="Alternar tema")
     def _refresh_theme_button():
         theme_btn.icon = ft.Icons.WB_SUNNY if page.theme_mode == ft.ThemeMode.LIGHT else ft.Icons.DARK_MODE
@@ -223,15 +206,10 @@ def main(page: ft.Page):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Row(
-                    spacing=5,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Image(src=logo_src, height=logo_h, fit=ft.ImageFit.CONTAIN, filter_quality=ft.FilterQuality.HIGH, tooltip="S.O.S Licitações"),
-                        ft.Text("PROGRAMA DE LICITAÇÃO", weight=ft.FontWeight.W_700, size=15),
-                    ],
-                ),
-                ft.Row(controls=[alerts_bell]),
+                ft.Row(spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                       controls=[ft.Image(src=logo_src, height=logo_h, fit=ft.ImageFit.CONTAIN, filter_quality=ft.FilterQuality.HIGH, tooltip="S.O.S Licitações"),
+                                 ft.Text("PROGRAMA DE LICITAÇÃO", weight=ft.FontWeight.W_700, size=15)]),
+                ft.Row(controls=[theme_btn, about_btn, alerts_bell]),
             ],
         ),
     )
@@ -241,6 +219,7 @@ def main(page: ft.Page):
     host = ft.Container(expand=True)
     content = ft.Container(expand=True, bgcolor= SURFACE(), padding=10, content=host)
 
+    # ===== Lazy import das páginas =====
     def _get_page_builder(key: str):
         if key in _PAGE_BUILDERS_CACHE:
             return _PAGE_BUILDERS_CACHE[key]
@@ -249,7 +228,6 @@ def main(page: ft.Page):
             _PAGE_BUILDERS_CACHE[key] = factory
             return factory
         except Exception as ex:
-            # devolve uma “página” de erro amigável em vez de derrubar o app
             def _err(_page: ft.Page):
                 return ft.Container(
                     padding=20,
@@ -271,7 +249,7 @@ def main(page: ft.Page):
 
     current_key = NAV[0][0]
 
-    # ======== BARRA LATERAL (colapsável) ========
+    # ======== Sidebar ========
     nav_collapsed = {"value": False}
 
     def _make_nav_button(key: str, label: str, icon):
