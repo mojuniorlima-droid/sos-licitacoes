@@ -1,8 +1,19 @@
+from __future__ import annotations
+import os
 import flet as ft
+from pathlib import Path
+import main as app_main  # usa a função main(page) do seu main.py
 
-# IMPORTA a função main da SUA aplicação, sem modificar nada
-from main import main  # seu main.py precisa ter def main(page): ...
+def _run():
+    ROOT = Path(__file__).resolve().parent
+    port = int(os.environ.get("PORT", "8000"))
+    ft.app(
+        target=app_main.main,
+        view=ft.AppView.FLET_APP,     # renderizador Flet web
+        assets_dir=str(ROOT),         # garante assets na raiz do projeto
+        port=port,
+        web_renderer="html",
+    )
 
 if __name__ == "__main__":
-    # Usa renderer HTML (costuma evitar bug de clique no Web)
-    ft.app(target=main, view=ft.AppView.WEB_BROWSER, assets_dir=".", web_renderer="html")
+    _run()

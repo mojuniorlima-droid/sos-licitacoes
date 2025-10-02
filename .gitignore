@@ -1,5 +1,41 @@
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.build/
 
+# Virtual env
+.venv/
+env/
+venv/
 
-.env
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
+# Logs e temporários
+*.log
+*.tmp
+*.temp
+
+# OneDrive cache (geralmente inútil no Git)
+~$*
+*.lnk
+
+# App data local
+.edital_index/
+
+# DBs locais / artefatos
+app.db
+data.db
+exports/
+storage/
+
+# Uploads de usuário (não versionar PDF/arquivos grandes)
+uploads/
