@@ -182,7 +182,7 @@ def main(page: ft.Page):
             actions=[ft.TextButton("Fechar")],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        dlg.actions[0].on_click = lambda ev: setattr(dlg, "open", False) or page.update()
+        dlg.actions[0].on_click = lambda ev: setattr(dlg, "open", False) | page.update()
         page.dialog = dlg; dlg.open = True; page.update()
 
     def toggle_theme(e=None):
@@ -359,7 +359,8 @@ def main(page: ft.Page):
             host.content = ft.Container(padding=20, content=ft.Text(err, color="#B00020", selectable=True))
             page.update()
 
-    page.call_later(_safe_render_inicial, 0.01)
+    # Compatível com Flet 0.28.3
+    page.run_task(_safe_render_inicial)
 
 if __name__ == "__main__":
     ROOT = Path(__file__).resolve().parent
@@ -367,6 +368,5 @@ if __name__ == "__main__":
         target=main,
         view=ft.AppView.FLET_APP,
         assets_dir=str(ROOT),   # ok manter para seus assets
-        # NÃO force web_renderer aqui (CanvasKit é o bundle esperado no runtime web)
-        # web_renderer="canvaskit",
+        # não force web_renderer aqui
     )
