@@ -1,19 +1,34 @@
+# run_web.py
 from __future__ import annotations
-import os
-import flet as ft
+import os, sys, traceback
 from pathlib import Path
-import main as app_main  # usa a função main(page) do seu main.py
+import flet as ft
 
-def _run():
-    ROOT = Path(__file__).resolve().parent
+def _boot():
     port = int(os.environ.get("PORT", "8000"))
-    ft.app(
-        target=app_main.main,
-        view=ft.AppView.FLET_APP,     # renderizador Flet web
-        assets_dir=str(ROOT),         # garante assets na raiz do projeto
-        port=port,
-        web_renderer="html",
-    )
+    root = Path(__file__).resolve().parent
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")  # logs sem buffer
+
+    print(f"[BOOT] Starting Flet app on port {port} | CWD={os.getcwd()}", flush=True)
+    try:
+        import main as app_main
+    except Exception as ex:
+        print("[BOOT][FATAL] Failed to import main:", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        raise
+
+    try:
+        ft.app(
+            target=app_main.main,            # usa sua função main(page)
+            view=ft.AppView.WEB_BROWSER,     # forçar renderer web puro
+            assets_dir=str(root),
+            port=port,
+            web_renderer="html",
+        )
+    except Exception as ex:
+        print("[BOOT][FATAL] ft.app crashed:", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
-    _run()
+    _boot()
