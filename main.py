@@ -1,7 +1,7 @@
 import flet as ft
 
 # -----------------------------
-# THEME: tenta importar; se não houver, usa fallback embutido (sem ft.colors)
+# THEME fallback: nada de ft.colors / brightness / use_material3
 # -----------------------------
 try:
     from theme import apply_modern_theme as _apply_modern_theme_external  # type: ignore
@@ -10,22 +10,21 @@ except Exception:
 
 def apply_modern_theme(page: ft.Page):
     """
-    Fallback de tema caso theme.apply_modern_theme não exista.
-    Não usa ft.colors/ft.Colors para evitar incompatibilidades.
+    Mantém compatibilidade ampla: não usa argumentos em Theme().
+    O claro/escuro é controlado só por page.theme_mode.
     """
     if _apply_modern_theme_external:
         try:
-            return _apply_modern_theme_external(page)  # usa o do projeto, se existir
+            return _apply_modern_theme_external(page)
         except Exception:
             pass
 
-    # Fallback simples: só define Theme Material 3 e brilho.
-    if page.theme_mode == ft.ThemeMode.DARK:
-        page.theme = ft.Theme(use_material3=True, brightness=ft.Brightness.DARK)
-    else:
-        page.theme = ft.Theme(use_material3=True, brightness=ft.Brightness.LIGHT)
+    try:
+        page.theme = ft.Theme()  # sem kwargs para evitar incompatibilidades
+    except Exception:
+        pass
 
-    # Em desktop, window_bgcolor pode existir; em web, ignore.
+    # Em ambientes desktop, window_bgcolor pode existir; ignore se não existir
     try:
         page.window_bgcolor = None
     except Exception:
@@ -33,7 +32,7 @@ def apply_modern_theme(page: ft.Page):
 
 
 # -----------------------------
-# Fallbacks para componentes opcionais (não quebrar se faltar arquivo)
+# Fallbacks para componentes opcionais
 # -----------------------------
 try:
     from components.alerts_bell import AlertsBell  # type: ignore
