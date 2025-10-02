@@ -1,4 +1,4 @@
-# run_web.py — smoke test/override controlado por APP_HELLO
+# run_web.py — servidor Flet sem assets_dir (para não quebrar o Flutter Web)
 from __future__ import annotations
 import os, sys, traceback
 from pathlib import Path
@@ -14,7 +14,7 @@ def main():
     port = int(os.environ.get("PORT", "10000"))
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
 
-    use_hello = os.environ.get("APP_HELLO") == "1"  # <<< liga override
+    use_hello = os.environ.get("APP_HELLO") == "1"  # override opcional
     print(f"[BOOT] FLET_APP on 0.0.0.0:{port} | APP_HELLO={use_hello}", flush=True)
 
     try:
@@ -34,10 +34,10 @@ def main():
         ft.app(
             target=target,
             view=ft.AppView.FLET_APP,   # servidor web do Flet
-            assets_dir=str(root),
             host="0.0.0.0",
             port=port,
-            web_renderer="html",
+            web_renderer="html",        # força HTML (evita canvaskit)
+            # <<< NÃO passar assets_dir aqui! >>>
         )
     except Exception:
         print("[BOOT][FATAL] ft.app crashed:", file=sys.stderr, flush=True)
